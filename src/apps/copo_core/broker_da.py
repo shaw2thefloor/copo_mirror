@@ -16,7 +16,7 @@ from common.schemas.utils import data_utils
 from common.utils import helpers
 from src.apps.copo_barcoding_submission.utils.EnaTaggedSequence import EnaTaggedSequence
 from src.apps.copo_single_cell_submission.utils import copo_single_cell
-
+from src.apps.ei_edp.utils import edp_utils
 class BrokerDA:
     def __init__(self, **kwargs):
         self.param_dict = kwargs
@@ -648,11 +648,26 @@ class BrokerDA:
 
     def do_publish_singlecell_ena(self):
         return self._publish_singlecell(repository="ena")
-  
 
     def do_publish_singlecell_zenodo(self):
         return self._publish_singlecell(repository="zenodo")
     
+    def do_submit_singlecell_sapio(self):
+        target_id = self.param_dict.get("target_id", str())
+        target_ids  = self.param_dict.get("target_ids", [])
+        checklist_id = self.request_dict.get("singlecell_checklist_id", str())
+        study_id = self.request_dict.get("study_id", "")
+
+        result = edp_utils.submit_edp_to_sapio(profile_id=self.profile_id,  study_id=study_id)
+
+        report_metadata = dict()
+        report_metadata["status"] = result.get("status", "success")
+        report_metadata["message"] = result.get("message", "success")
+        self.context["action_feedback"] = report_metadata       
+        if result.get("status","success") == "success":
+            self.context["table_data"] = copo_single_cell.generate_singlecell_record(profile_id=self.profile_id,checklist_id=checklist_id, study_id=study_id)
+            self.context["component"] = "singlecell"
+        return self.context        
     def do_make_snapshot(self):
         target_id = self.param_dict.get("target_id", str())
         target_ids  = self.param_dict.get("target_ids", [])

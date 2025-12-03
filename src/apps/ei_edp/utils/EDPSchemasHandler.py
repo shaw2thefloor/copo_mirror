@@ -14,7 +14,9 @@ from .sapio.sapio_datamanager  import Sapio
 from sapiopylib.rest.utils.recordmodel.PyRecordModel import PyRecordModel
 from typing import List
 from openpyxl.utils.dataframe import dataframe_to_rows
-from openpyxl.utils import quote_sheetname
+from common.ena_utils.generic_helper import notify_singlecell_status
+from openpyxl.worksheet.formula import ArrayFormula
+#from openpyxl.utils import quote_sheetname
 
 class EDPSchemasHandler(SingleCellSchemasHandler):
     def write_manifest(self, profile_id, singlecell_schema, checklist_id=None, singlecell=None, file_path=None, format="xlsx", request=None):
@@ -29,6 +31,7 @@ class EDPSchemasHandler(SingleCellSchemasHandler):
 
         sapio_project_id = profile.get("sapio_project_id", None)
         samples_under_project : List[PyRecordModel] = []
+        sapio_project: PyRecordModel = None
         if sapio_project_id:
             project_records = Sapio().dataRecordManager.query_data_records(data_type_name="Project", 
                                                     data_field_name="C_ProjectIdentifier", 
@@ -36,9 +39,9 @@ class EDPSchemasHandler(SingleCellSchemasHandler):
             if not project_records or len(project_records) ==0:
                 return {"status": "error", "message": f"Sapio Project {profile['sapio_project_id']} not found."}                
             project_record = project_records[0]
-            project: PyRecordModel = Sapio().inst_man.add_existing_record(project_record)  
-            Sapio().relationship_man.load_children([project], 'Sample')
-            samples_under_project: List[PyRecordModel] = project.get_children_of_type('Sample')
+            sapio_project: PyRecordModel = Sapio().inst_man.add_existing_record(project_record)  
+            Sapio().relationship_man.load_children([sapio_project], 'Sample')
+            samples_under_project: List[PyRecordModel] = sapio_project.get_children_of_type('Sample')
             #populate the singlecell data with sapio data
             
 
@@ -78,8 +81,12 @@ class EDPSchemasHandler(SingleCellSchemasHandler):
         worksheet_sample["C4"] = profile.get("budget_user", "")
         worksheet_sample["C5"] = profile.get("sapio_project_id", "")
 
-        worksheet_helper = workbook["How to complete the Manifest"]
+        if sapio_project:
+            worksheet_sample["L9"] = sapio_project.get_field_value("C_HandS")
+            if samples_under_project:
+                worksheet_sample["L8"] = samples_under_project[0].get_field_value("C_SampleReturn")
 
+        worksheet_helper = workbook["How to complete the Manifest"]
 
         for checklist in checklists.keys():
             if checklist_id and checklist_id != checklist:
@@ -265,12 +272,19 @@ class EDPSchemasHandler(SingleCellSchemasHandler):
                             worksheet.add_data_validation(dv)
                             dv.add(cell_start_end)
                         
+                    
+                    lookup_mapping = {"taxon_id":"B", "scientific_name":"C","biosampleAccession":"D"}
+
                     data_row_index = title_row   
                     for _, row in component_data_df.iterrows():
                         data_row_index += 1
                         cell = worksheet.cell(row=data_row_index, column=column_index)
                         cell.value = row.get(field["term_name"], "")
 
+                    if field["term_name"] in lookup_mapping.keys():
+                        column_letter = get_column_letter(column_index)
+                        worksheet[f"{column_letter}{title_row + 1}"] = ArrayFormula(f"{column_letter}{title_row + 1}:{column_letter}{data_row_index}", f"=LOOKUP((I{title_row + 1}:I{data_row_index}),sample_metadata!$A:$A, sample_metadata!${lookup_mapping[field["term_name"]]}:${lookup_mapping[field["term_name"]]})")
+                             
 
         workbook.save(file_path)
 
@@ -289,8 +303,11 @@ class EDPSchemasSpreadsheet(SinglecellschemasSpreadsheet):
             workbook = load_workbook(self.file, data_only=True)
             profile = Profile().get_record(self.profile_id)
             sample_ws = workbook["sample"]
-            sapio_project_id = str(sample_ws["C5"].value).strip()
-            emails = str(sample_ws["E6"].value).strip()
+            sapio_project_id = str(sample_ws["C5"].value)
+            if sample_ws["E6"].value:
+                emails = str(sample_ws["E6"].value).strip()
+            else:
+                emails = ""
             is_returned = sample_ws["L8"].value
             health_safety = sample_ws["L9"].value
             
@@ -315,7 +332,7 @@ class EDPSchemasSpreadsheet(SinglecellschemasSpreadsheet):
             self.new_data["study"] = study_df
 
             for sheetname in workbook.sheetnames:
-                if sheetname in ["How to complete the Manifest","sample metadata"]:
+                if sheetname in ["How to complete the Manifest","sample_metadata"]:
                     continue
                 if sheetname not in self.schemas:
                     notify_singlecell_status(

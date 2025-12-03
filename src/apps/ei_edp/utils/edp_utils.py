@@ -4,6 +4,8 @@ from common.dal.profile_da import Profile
 from .sapio.sapio_datamanager  import Sapio
 from typing import List
 import math
+from src.apps.copo_single_cell_submission.utils.da import Singlecell, SinglecellSchemas
+import pandas as pd
 
 l = Logger()
 
@@ -73,6 +75,7 @@ def post_save_edp_profile(profile):
         if not profile.get("sapio_project_id",""):
             project_records = Sapio().dataRecordManager.add_data_records_with_data(data_type_name="Project", field_map_list=[{"ProjectName": profile.get("jira_ticket_number",""),
                                                                                                     "ProjectDesc": profile.get("description",""),
+                                                                                                    "C_SampleCount": profile.get("no_of_samples",0),
                                                                                                     "C_BudgetHolder": profile.get("budget_user","")}])            
             
             sapio_project_id = project_records[0].get_field_value('C_ProjectIdentifier')
@@ -99,6 +102,7 @@ def post_save_edp_profile(profile):
             project_record.set_field_value("ProjectName", profile.get("jira_ticket_number",""))
             project_record.set_field_value("ProjectDesc", profile.get("description",""))
             project_record.set_field_value("C_BudgetHolder", profile.get("budget_user",""))
+            project_record.set_field_value("C_SampleCount", profile.get("no_of_samples",0))
             Sapio().dataRecordManager.commit_data_records([project_record])
 
         #attach samples to Sapio Project
@@ -135,7 +139,7 @@ def post_save_edp_profile(profile):
                 if not sample.get_field_value("C_CustomerSampleName"):
                     samples_to_remove.append(sample)
                     diff -=1
-                    assigned_plate_id = sample.get_field_value("PlateId")
+                    assigned_plate_id = sample.get_field_value("PlateId") #PlateId is not always used, check StorageUnitPath as well, TBD
                     if assigned_plate_id:
                         if assigned_plate_id not in assigned_plates_map_for_samples_to_delete:
                             assigned_plates_map_for_samples_to_delete[assigned_plate_id] = []
@@ -299,3 +303,96 @@ def post_delete_edp_profile(profile):
             l.error("Failed to delete sapio profile for profile id: " + str(profile["_id"]) + " Error: " + str(e))
             return  {"status":"warning", "message":"Profile has been deleted. However, it is failed to delete from Sapio! "}
     return {"status": "success"}
+
+def submit_edp_to_sapio(profile_id, study_id):
+    profile = Profile().get_record(profile_id)
+    if not profile:
+        return {"status": "error", "message": f"Profile {profile_id} not found."}
+    # Submit EDP data to Sapio
+    singlecell = Singlecell().get_collection_handle().find_one({"profile_id": profile_id, "study_id": study_id})
+    if not singlecell:
+        return {"status": "error", "message": f"Singlecell submission for profile {profile_id} and study {study_id} not found."}    
+
+    project_records = Sapio().dataRecordManager.query_data_records(data_type_name="Project", 
+                                        data_field_name="C_ProjectIdentifier", 
+                                        value_list=[study_id]).result_list
+    if not project_records or len(project_records) ==0:
+        return {"status": "error", "message": f"Sapio Project {study_id} not found."}
+    singlecell_components = singlecell.get("components",{})
+
+    study = singlecell_components.get("study",[])[0]
+    #samples = singlecell_components.get("sample",[])
+
+    project_record = project_records[0]
+    #project_record.set_field_value("C_HandS", study.get("health_safety",""))
+    #Sapio().dataRecordManager.commit_data_records([project_record])
+
+    project: PyRecordModel = Sapio().inst_man.add_existing_record(project_record)  
+    Sapio().relationship_man.load_children([project], 'Sample')
+    samples_under_project: List[PyRecordModel] = project.get_children_of_type('Sample')
+    samples_under_project_map = {s.get_field_value("SampleId"): s for s in samples_under_project}
+
+    schemas = SinglecellSchemas().get_schema(schema_name=singlecell["schema_name"], target_id=singlecell["checklist_id"])
+    
+    sapio_mapping_df = pd.DataFrame(columns=["term_name","sapio_name"])
+    for component_name, component_schema in schemas.items():
+        component_schema_df = pd.DataFrame.from_records(component_schema)
+        sapio_component_mapping_df = component_schema_df[(~pd.isna(component_schema_df["sapio_name"]) 
+                                                           & (component_schema_df["sapio_name"].str.contains(":")) 
+                                                           & (component_schema_df["term_manifest_behavior"]!="protected"))
+                                                           ][["term_name","sapio_name"]]
+        sapio_mapping_df = pd.concat([sapio_mapping_df, sapio_component_mapping_df], ignore_index=True)
+        #sapio_mapping.update({row["term_name"]: row.get("sapio_name","") for index, row in component_schema_df.iterrows() if row.get("sapio_field","")})
+
+    sapio_mapping_df["sapio_object"] = sapio_mapping_df["sapio_name"].apply(lambda x: x.split(":")[0]  )
+    sapio_mapping_df["sapio_field"] = sapio_mapping_df["sapio_name"].apply(lambda x: x.split(":")[1]  )
+    sapio_mapping_df.drop(columns=["sapio_name"], inplace=True)
+    sapio_object_dict = {}
+    for c, sapio_object_df in sapio_mapping_df.groupby("sapio_object", sort=False):
+        # component_schemas_df = schemas_df[schemas_df['component_name']== c]
+        sapio_object_df.set_index("term_name", inplace=True)
+        sapio_object_dict[c] = sapio_object_df["sapio_field"].to_dict()
+
+    project_sapio_mapping = sapio_object_dict.get("Project",{})
+    sample_sapio_mapping = sapio_object_dict.get("Sample",{})
+
+    for component_name, component_schema in schemas.items():
+        #if component_name == "study":
+        #    continue
+        
+        component_schema_df = pd.DataFrame.from_records(component_schema)
+        component_data_df = pd.DataFrame.from_records(singlecell_components.get(component_name,[]))
+        if component_data_df.empty:
+            continue
+
+        columns =  component_data_df.columns 
+        component_data_df.drop(columns=[column for column in columns if column not in component_schema_df["term_name"].values]   
+                               , axis=1, inplace=True)
+
+        if component_name == "study":
+            for index, row in component_data_df.iterrows():
+                for column in component_data_df.columns:
+                    sapio_field = project_sapio_mapping.get(column, "")
+                    if sapio_field:
+                        project.set_field_value(sapio_field, row[column])
+                    sapio_field = sample_sapio_mapping.get(column, "")
+                    if sapio_field:
+                        #set to all samples under project
+                        for sapio_sample in samples_under_project:
+                            sapio_sample.set_field_value(sapio_field, row[column])
+
+        if component_name == "sample":
+            for index, row in component_data_df.iterrows():
+                sapio_sample_id = row.get("sample_id","")
+                sapio_sample = samples_under_project_map.get(sapio_sample_id,None)
+                if not sapio_sample:
+                    l.error(f"Sample with Sample ID {sapio_sample_id} not found in Sapio Project {study_id}. Skipping...")
+                    continue
+                for column in component_data_df.columns:
+                    sapio_field = sample_sapio_mapping.get(column, "")
+                    if sapio_field:
+                        sapio_sample.set_field_value(sapio_field, row[column])
+                
+    Sapio().rec_man.store_and_commit()
+
+    return {"status": "success", "message": f"EDP data submitted to Sapio Project {study_id} successfully."}

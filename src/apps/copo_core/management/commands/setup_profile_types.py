@@ -269,6 +269,16 @@ class Command(BaseCommand):
             action="delete_singlecell",
             icon_colour="red",
         )
+        submit_singlecell_single_sapio = RecordActionButton().create_record_action_button(
+            name="submit_singlecell_single_sapio",
+            title="submit record to Sapio ",
+            label="To Sapio",
+            type="single",
+            error_message="Please select one record to submit",
+            icon_class="fa fa-info-circle",
+            action="submit_singlecell_sapio",
+            icon_colour="teal",
+        )           
         submit_singlecell_single_ena = RecordActionButton().create_record_action_button(
             name="submit_singlecell_single_ena",
             title="Submit Single-cell Records to ENA",
