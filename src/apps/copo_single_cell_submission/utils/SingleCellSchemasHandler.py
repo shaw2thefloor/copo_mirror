@@ -915,9 +915,10 @@ class SinglecellschemasSpreadsheet:
         singlecell = (
             SinglecellSchemas()
             .get_collection_handle()
-            .find_one({"name": self.schema_name}, {"schemas": 1, "enums": 1})
+            .find_one({"name": self.schema_name}, {"schemas": 1, "enums": 1, "components":1})
         )
         self.schemas = singlecell["schemas"]
+        self.schema_components = singlecell.get("components", {})
 
         if self.schemas:
             for component in list(self.schemas.keys()):
@@ -1163,6 +1164,7 @@ class SinglecellschemasSpreadsheet:
                         warnings=warnings,
                         flag=flag,
                         isupdate=self.isupdate,
+                        first_data_line_no = self.schema_components.get(component, {}).get("first_data_line_no", 2)
                     ).validate()
                 except Exception as e:
                     l.exception(e)

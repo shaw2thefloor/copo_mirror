@@ -4,9 +4,8 @@ import os
 from django.conf import settings
 from openpyxl.utils.cell import get_column_letter
 from openpyxl import load_workbook
-from openpyxl.styles import Font, NamedStyle,PatternFill, Alignment, Border, Side
+from openpyxl.styles import Font, NamedStyle,PatternFill, Alignment, Border, Side,Protection
 from openpyxl.comments import Comment
-from openpyxl.worksheet.protection import SheetProtection
 from openpyxl.worksheet.datavalidation import DataValidation 
 from common.dal.profile_da import Profile
 from src.apps.copo_single_cell_submission.utils.SingleCellSchemasHandler import SingleCellSchemasHandler, SinglecellschemasSpreadsheet
@@ -16,8 +15,9 @@ from typing import List
 from openpyxl.utils.dataframe import dataframe_to_rows
 from common.ena_utils.generic_helper import notify_singlecell_status
 from openpyxl.worksheet.formula import ArrayFormula
-from openpyxl.utils import quote_sheetname
-from openpyxl.workbook.defined_name import DefinedName
+
+
+
 class EDPSchemasHandler(SingleCellSchemasHandler):
     def write_manifest(self, profile_id, singlecell_schema, checklist_id=None, singlecell=None, file_path=None, format="xlsx", request=None):
         schema_name = singlecell_schema["name"]
@@ -77,16 +77,20 @@ class EDPSchemasHandler(SingleCellSchemasHandler):
 
         workbook = load_workbook(settings.SINGLE_CELL_SCHEMAS_TEMPLATE_URL["EI_EDP"])
         worksheet_sample = workbook["sample"]
+
         worksheet_sample["F5"] = profile.get("jira_ticket_number", "")
         worksheet_sample["C4"] = profile.get("budget_user", "")
         worksheet_sample["C5"] = profile.get("sapio_project_id", "")
 
         if sapio_project:
             worksheet_sample["L9"] = sapio_project.get_field_value("C_HandS")
+            worksheet_sample["L9"].protection = Protection(locked=False)
             if samples_under_project:
                 worksheet_sample["L8"] = samples_under_project[0].get_field_value("C_SampleReturn")
+                worksheet_sample["L8"].protection = Protection(locked=False)
 
         worksheet_helper = workbook["How to complete the Manifest"]
+        worksheet_helper.protection.sheet = True
 
         for checklist in checklists.keys():
             if checklist_id and checklist_id != checklist:
@@ -200,7 +204,8 @@ class EDPSchemasHandler(SingleCellSchemasHandler):
                 else:
                     worksheet = workbook.create_sheet(component_name)
                     title_row = 1 
-   
+
+                worksheet.protection.sheet = True
                 column_index = 0
                 for _, field in component_schema_df.iterrows():
                     column_index += 1
@@ -219,10 +224,14 @@ class EDPSchemasHandler(SingleCellSchemasHandler):
                         cell.style = protected_style
                         if title_row > 1:
                             cell_highlight = worksheet.cell(row=title_row-1, column=column_index)
-                            cell_highlight.fill = protected_style.fill
-
+                            cell_highlight.fill = protected_style.fill                 
                     elif field["term_manifest_behavior"] == "hidden":
                         worksheet.column_dimensions[get_column_letter(column_index)].hidden = True
+                    else:
+                        #unprotect the cell of the column
+                        for i in range(1, len(samples_under_project) ):
+                            cell_under_column = worksheet.cell(row=title_row+i, column=column_index)
+                            cell_under_column.protection = Protection(locked=False)
 
                     worksheet.column_dimensions[get_column_letter(column_index)].width = 17.83
 
@@ -234,14 +243,13 @@ class EDPSchemasHandler(SingleCellSchemasHandler):
                             #options = submitter_sample_reference
                             #av_range = DefinedName('submitter_sample_reference', attr_text="sample_metadata!$A$2:$A$8")
                             #worksheet.defined_names.add(av_range)
-                            formula1 = '=sample_metadata!$A$2:$A$8'
+                            formula1 = '=sample_metadata!$A$2:$A$1000'
                         
                         else:
                             options = field["choice"]   
                             if options:
                                 formula1='"' + ",".join(options) + '"'
                         
-
                         if formula1:
                             dv = DataValidation(
                                 type="list",
