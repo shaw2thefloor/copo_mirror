@@ -16,8 +16,8 @@ from typing import List
 from openpyxl.utils.dataframe import dataframe_to_rows
 from common.ena_utils.generic_helper import notify_singlecell_status
 from openpyxl.worksheet.formula import ArrayFormula
-#from openpyxl.utils import quote_sheetname
-
+from openpyxl.utils import quote_sheetname
+from openpyxl.workbook.defined_name import DefinedName
 class EDPSchemasHandler(SingleCellSchemasHandler):
     def write_manifest(self, profile_id, singlecell_schema, checklist_id=None, singlecell=None, file_path=None, format="xlsx", request=None):
         schema_name = singlecell_schema["name"]
@@ -183,8 +183,9 @@ class EDPSchemasHandler(SingleCellSchemasHandler):
                     worksheet_sample = workbook.create_sheet("sample_metadata")
                     sample_metadata_columns = ["submitter_sample_reference", "taxon_id", "scientific_name","biosampleAccession"]
                     submitter_sample_reference = []
+                    worksheet_sample.append(sample_metadata_columns)
                     if not component_data_df.empty:
-                        for r in dataframe_to_rows(component_data_df[sample_metadata_columns], index=False, header=True):
+                        for r in dataframe_to_rows(component_data_df[sample_metadata_columns], index=False, header=False):
                             worksheet_sample.append(r)
                         submitter_sample_reference = component_data_df["submitter_sample_reference"].tolist()
                     component_data_df = sapio_component_data_df
@@ -226,18 +227,25 @@ class EDPSchemasHandler(SingleCellSchemasHandler):
                     worksheet.column_dimensions[get_column_letter(column_index)].width = 17.83
 
                     type = field.get("term_type", "string")
+                    formula1 = None
                     if type in ["enum", "suggested_enum"] or field["term_name"]=="submitter_sample_reference":
                         # Create a data-validation object with list validation
                         if field["term_name"]=="submitter_sample_reference":
-                            options = submitter_sample_reference
-                            #formula1 = "{0}!$A$2:$A$100".format(quote_sheetname("sample_metadata"))
+                            #options = submitter_sample_reference
+                            #av_range = DefinedName('submitter_sample_reference', attr_text="sample_metadata!$A$2:$A$8")
+                            #worksheet.defined_names.add(av_range)
+                            formula1 = '=sample_metadata!$A$2:$A$8'
+                        
                         else:
                             options = field["choice"]   
+                            if options:
+                                formula1='"' + ",".join(options) + '"'
+                        
 
-                        if options:
+                        if formula1:
                             dv = DataValidation(
                                 type="list",
-                                formula1='"' + ",".join(options) + '"',
+                                formula1=formula1,
                                 allow_blank=True,
                                 #prompt = description if description else "",
                             )
@@ -271,8 +279,7 @@ class EDPSchemasHandler(SingleCellSchemasHandler):
                             # Add the data-validation object to the worksheet
                             worksheet.add_data_validation(dv)
                             dv.add(cell_start_end)
-                        
-                    
+                                            
                     lookup_mapping = {"taxon_id":"B", "scientific_name":"C","biosampleAccession":"D"}
 
                     data_row_index = title_row   
@@ -284,7 +291,8 @@ class EDPSchemasHandler(SingleCellSchemasHandler):
                     if field["term_name"] in lookup_mapping.keys():
                         column_letter = get_column_letter(column_index)
                         worksheet[f"{column_letter}{title_row + 1}"] = ArrayFormula(f"{column_letter}{title_row + 1}:{column_letter}{data_row_index}", f"=LOOKUP((I{title_row + 1}:I{data_row_index}),sample_metadata!$A:$A, sample_metadata!${lookup_mapping[field["term_name"]]}:${lookup_mapping[field["term_name"]]})")
-                             
+                            
+                    workbook.move_sheet(workbook["sample_metadata"], offset = 10)
 
         workbook.save(file_path)
 
@@ -356,6 +364,7 @@ class EDPSchemasSpreadsheet(SinglecellschemasSpreadsheet):
                     for key, item in self.schemas[sheetname].items()
                 }
                 component_df["Project ID"] = profile["sapio_project_id"] if "sapio_project_id" in profile else ""    
+                component_df = component_df.loc[:, ~component_df.columns.str.contains('^Unnamed')]
                 component_df.fillna("", inplace=True)
                 self.data[sheetname] = component_df
                 self.new_data[sheetname] = component_df.rename(columns=new_column_name)

@@ -109,6 +109,7 @@ services:
       - SAPIO_USERNAME_FILE=/run/secrets/sapio_username
       - SAPIO_PASSWORD_FILE=/run/secrets/sapio_password
       - SAPIO_API_URL=https://earlham-ded-gold-lims.exemplareln.com/webservice/api
+      _ ENA_BROWSER_SERVICE=https://www.ebi.ac.uk/ena/browser/api
     depends_on:
       - redis
       - postgres
@@ -223,6 +224,7 @@ services:
       - SAPIO_USERNAME_FILE=/run/secrets/sapio_username
       - SAPIO_PASSWORD_FILE=/run/secrets/sapio_password
       - SAPIO_API_URL=https://earlham-ded-gold-lims.exemplareln.com/webservice/api
+      - ENA_BROWSER_SERVICE=https://www.ebi.ac.uk/ena/browser/api
     depends_on:
       - redis
       - postgres

@@ -9,6 +9,7 @@ class Validator:
         self.warnings = warnings
         self.flag = flag
         self.kwargs = kwargs
+        self.first_data_line_no = kwargs.get("first_data_line_no", 2)
 
     def validate(self):
         raise NotImplemented
