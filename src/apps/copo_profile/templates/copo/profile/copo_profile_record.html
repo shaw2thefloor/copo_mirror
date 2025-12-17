@@ -62,6 +62,12 @@
                                             {% endwith %}
                                         </div>
                                     {% endif %}
+                                    {% if profile.sapio_project_id%}
+                                        <div class="sapio-project-id-div" style="margin-top: 10px;">
+                                            <span class="bold-text">Sapio Project ID: </span> 
+                                            <span id="sapio_project_id_{{profile.id}}">{{ profile.sapio_project_id }}</span>
+                                        </div>
+                                    {% endif %}
                                     {% if profile.associated_type %}
                                         <div class="profile-info-label">
                                             Associated

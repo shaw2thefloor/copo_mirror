@@ -6,6 +6,8 @@ from typing import List
 import math
 from src.apps.copo_single_cell_submission.utils.da import Singlecell, SinglecellSchemas
 import pandas as pd
+from src.apps.copo_core.models import User
+from common.dal.copo_da import CopoGroup
 
 l = Logger()
 
@@ -70,6 +72,24 @@ def pre_save_edp_profile(auto_fields, **kwargs):
 
 def post_save_edp_profile(profile):
     project_record = None
+
+    #share profile with customer in COPO
+    customer_emails = profile.get("customer_emails","")
+    if customer_emails:
+        emails = [email.strip() for email in customer_emails.split(";")
+                   if email.strip()]
+
+        users = User.objects.filter(email__in = emails).values('id', 'email')
+        if users:
+            group = None
+            groups = CopoGroup().get_group_by_profile(profile_id=profile["_id"])
+            if not groups:
+                #create group for profile
+                group_id = CopoGroup().create_group_for_profile(profile_id=profile["_id"], group_name=profile["title"], owner_id=profile["user_id"])
+            else:
+                group_id = groups[0]["_id"]
+            CopoGroup().add_users_to_group(group_id=group_id, user_ids=[str(user['id']) for user in users])
+
     try:
         #update /create Sapio Project
         if not profile.get("sapio_project_id",""):

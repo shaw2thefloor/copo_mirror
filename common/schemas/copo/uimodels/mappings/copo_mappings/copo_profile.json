@@ -463,7 +463,6 @@
         }    
       ]
     },
- 
     {
       "help_tip": "",
       "required": "false",
@@ -483,7 +482,30 @@
       "id": "copo.profile.sapio_project_id",
       "type": "string",
       "show_in_table": true,
-      "control": "text"
+      "control": "text",
+      "readonly": "true"
+  },
+  {
+    "help_tip": "Customer Emails associated with Sapio Project, separated by semicolon (;)",
+    "required": "true",
+    "default_value": "",
+    "control_meta": {},
+    "versions": [
+      "ei_edp"
+    ],
+    "specifications": [
+      "ei_edp"
+    ],
+    "ref": "",
+    "deprecated": false,
+    "hidden": "false",
+    "label": "Customer Emails",
+    "show_in_form": true,
+    "id": "copo.profile.customer_emails",
+    "type": "string",
+    "show_in_table": true,
+    "control": "textarea",
+    "regex": "^(?!.*\\.{2,})(?!.*-{2,})[\\w.-]+@[a-zA-Z\\d.-]+\\.[a-zA-Z]{2,}([ ;]{1,}(?!.*\\.{2,})(?!.*-{2,})[\\w.-]+@[a-zA-Z\\d.-]+\\.[a-zA-Z]{2,})*$"
   }
   ] ,
  

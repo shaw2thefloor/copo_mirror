@@ -91,7 +91,7 @@ def copo_profile_index(request):
             {"$skip": db_skip_num},
             {"$limit": num_of_profiles_per_page},
             {"$project": {"study_status": "$submission.accessions.project.status", "study_release_date": "$submission.accessions.project.release_date",
-                          "sequencing_centre": 1, "title": 1, "description": 1, "associated_type": 1, "type": 1, "date_created": 1, "date_modified": 1}}
+                          "sequencing_centre": 1, "title": 1, "description": 1, "associated_type": 1, "type": 1, "date_created": 1, "date_modified": 1, "sapio_project_id":1}}
         ])
     
     profile_page = cursor_to_list_str2(

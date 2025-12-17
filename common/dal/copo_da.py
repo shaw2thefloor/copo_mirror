@@ -1131,6 +1131,27 @@ class CopoGroup(DAComponent):
             {'_id': ObjectId(group_id)}, {'$pull': {'repo_ids': ObjectId(repo_id)}}
         )
 
+    def get_group_by_profile(self, profile_id):
+        groups = self.Group.find({"shared_profile_ids": ObjectId(profile_id)})
+        return cursor_to_list(groups)
+
+    def create_group_for_profile(self, profile_id, group_name, owner_id):
+        group_fields = helpers.json_to_pytype(DB_TEMPLATES['COPO_GROUP'])
+        group_fields['owner_id'] = owner_id
+        group_fields['name'] = group_name
+        group_fields['description'] = 'Auto-generated group for profile sharing'
+        group_fields['date_created'] = helpers.get_datetime().strftime(
+            "%d-%m-%Y %H:%M:%S"
+        )
+        group_fields['shared_profile_ids'] = [ObjectId(profile_id)]
+        # Get inserted document ID
+        return self.Group.insert_one(group_fields).inserted_id
+
+    def add_users_to_group(self, group_id, user_ids):
+        return self.Group.update_one(
+            {'_id': ObjectId(group_id)}, {'$push': {'member_ids': {"$each": user_ids}}}
+        )
+
 
 class DataFile(DAComponent):
     def __init__(self, profile_id=None, subcomponent=None):
