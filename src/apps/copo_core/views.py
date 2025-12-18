@@ -25,6 +25,7 @@ from src.apps.copo_barcoding_submission.utils.da import TaggedSequence
 from src.apps.copo_assembly_submission.utils.da import Assembly
 from src.apps.copo_seq_annotation_submission.utils.da import SequenceAnnotation
 from src.apps.copo_single_cell_submission.utils.da import Singlecell
+from src.apps.ei_edp.utils.edp_utils import join_shared_edp_profile
 from common.s3.s3Connection import S3Connection as s3
 from common.lookup.lookup import REPO_NAME_LOOKUP
 from .models import Banner
@@ -590,7 +591,7 @@ def search_copo_components(request, data_source):
 
     return HttpResponse(jsonpickle.encode(data), content_type='application/json')
 
-
+@login_required
 def create_group(request):
     name = request.POST['group_name']
     description = request.POST['description']
@@ -606,7 +607,7 @@ def create_group(request):
     else:
         return HttpResponseBadRequest('Forbidden - Group with the same name already exists!')
 
-
+@login_required
 def edit_group(request):
     group_id = request.POST['group_id']
     name = request.POST['group_name']
@@ -625,7 +626,7 @@ def edit_group(request):
         else:
             return HttpResponseBadRequest('Forbidden - Group with the same name already exists!')
 
-
+@login_required
 def delete_group(request):
     id = request.GET.get('group_id','')
     deleted = CopoGroup().delete_group(group_id=id)
@@ -634,7 +635,7 @@ def delete_group(request):
     else:
         return HttpResponseBadRequest('Error Deleting Group - Try Again')
 
-
+@login_required
 def view_group(request):
     id = request.GET.get('group_id','')
     group_info = CopoGroup().view_shared_group(group_id=id)
@@ -643,7 +644,7 @@ def view_group(request):
     else:
         return HttpResponseBadRequest('Error Viewing Group - Try Again')
 
-
+@login_required
 def add_profile_to_group(request):
     group_id = request.GET.get('group_id','')
     profile_id = request.GET.get('profile_id','')
@@ -653,7 +654,7 @@ def add_profile_to_group(request):
     else:
         return HttpResponseBadRequest(json.dumps({'resp': 'Server Error - Try again'}))
 
-
+@login_required
 def remove_profile_from_group(request):
     group_id = request.GET.get('group_id','')
     profile_id = request.GET.get('profile_id','')
@@ -663,18 +664,17 @@ def remove_profile_from_group(request):
     else:
         return HttpResponseBadRequest(json.dumps({'resp': 'Server Error - Try again'}))
 
-
+@login_required
 def get_profiles_in_group(request):
     group_id = request.GET.get('group_id','')
     grp_info = CopoGroup().get_profiles_for_group_info(group_id=group_id)
     return HttpResponse(json_util.dumps({'resp': grp_info}))
 
-
+@login_required
 def get_users_in_group(request):
     group_id = request.GET.get('group_id','')
     usr_info = CopoGroup().get_users_for_group_info(group_id=group_id)
     return HttpResponse(json_util.dumps({'resp': usr_info}))
-
 
 def get_users(request):
     q = request.GET['q']
@@ -685,17 +685,31 @@ def get_users(request):
         return HttpResponse()
     return HttpResponse(json.dumps(x))
 
-
+@login_required
 def add_user_to_group(request):
     group_id = request.GET.get('group_id','')
     user_id = request.GET.get('user_id','')
     grp_info = CopoGroup().add_user_to_group(group_id=group_id, user_id=user_id)
     return HttpResponse(json_util.dumps({'resp': grp_info}))
 
-
+@login_required
 def remove_user_from_group(request):
     group_id = request.GET.get('group_id','')
     user_id = request.GET.get('user_id','')
     grp_info = CopoGroup().remove_user_from_group(
         group_id=group_id, user_id=user_id)
     return HttpResponse(json_util.dumps({'resp': grp_info}))
+
+@login_required
+def join_shared_profile(request, profile_id, token):
+    profile = Profile().get_record(profile_id)
+    if isinstance(profile,InvalidId):
+        return HttpResponseBadRequest(json.dumps({'resp': 'Profile Not Found'}))
+    if profile["type"] == "ei_edp":
+        result = join_shared_edp_profile(profile, token)
+        if result['status'] == 'success':
+            return HttpResponse(json.dumps({'resp': 'You have successfully joined this profile'}))
+        else:
+            return HttpResponseBadRequest(json.dumps({'resp': result['message']}))
+    else:        
+        return HttpResponseBadRequest(json.dumps({'resp': 'You are not authorised to join this profile'}))

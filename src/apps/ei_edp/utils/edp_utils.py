@@ -8,6 +8,9 @@ from src.apps.copo_single_cell_submission.utils.da import Singlecell, Singlecell
 import pandas as pd
 from src.apps.copo_core.models import User
 from common.dal.copo_da import CopoGroup
+from common.utils import helpers
+import uuid
+from .email import Email
 
 l = Logger()
 
@@ -73,23 +76,44 @@ def pre_save_edp_profile(auto_fields, **kwargs):
 def post_save_edp_profile(profile):
     project_record = None
 
+    current_user = helpers.get_current_user()
     #share profile with customer in COPO
     customer_emails = profile.get("customer_emails","")
     if customer_emails:
         emails = [email.strip() for email in customer_emails.split(";")
                    if email.strip()]
 
+        group_id = None
+        groups = CopoGroup().get_group_by_profile(profile_id=profile["_id"])
+        if not groups:
+            #create group for profile
+            group_id = CopoGroup().create_group_for_profile(profile_id=profile["_id"], group_name=profile["title"], owner_id=profile["user_id"])
+        else:
+            group_id = groups[0]["_id"]
+        current_shared_users = CopoGroup().get_users_for_group_info(group_id=group_id)
+ 
+        missing_user_emails = set(emails)
         users = User.objects.filter(email__in = emails).values('id', 'email')
         if users:
-            group = None
-            groups = CopoGroup().get_group_by_profile(profile_id=profile["_id"])
-            if not groups:
-                #create group for profile
-                group_id = CopoGroup().create_group_for_profile(profile_id=profile["_id"], group_name=profile["title"], owner_id=profile["user_id"])
-            else:
-                group_id = groups[0]["_id"]
-            CopoGroup().add_users_to_group(group_id=group_id, user_ids=[str(user['id']) for user in users])
+            missing_user_emails = set(emails) - {user.email for user in users}            
 
+            new_shared_user = {str(user['id']) : user for user in users if 
+                                    user.id not in incorrect_shared_user_ids 
+                                    and user.email != current_user.email
+                                }
+            CopoGroup().add_users_to_group(group_id=group_id, user_ids=list(new_shared_user.keys()))
+            #send email to new_shared_user_ids to notify them of shared profile
+            Email().notify_shared_profile_to_existing_user(profile, new_shared_user, "")
+
+        incorrect_shared_user_ids = [str(user["id"]) for user in current_shared_users if user["email"] not in emails]
+        CopoGroup().remove_users_from_group(group_id=group_id, user_ids=incorrect_shared_user_ids)
+
+        if missing_user_emails:
+            #create customer_emails_tokens for these emails
+            customer_emails_tokens = { str(uuid.uuid4()):email for email in missing_user_emails}
+            Profile().get_collection_handle().update_one({"_id":profile["_id"]},{"$set":{"customer_emails_tokens": customer_emails_tokens}})
+            #send email to these users with token link to join the profile
+            Email().notify_shared_profile_to_not_exist_user(profile, customer_emails_tokens)
     try:
         #update /create Sapio Project
         if not profile.get("sapio_project_id",""):
@@ -416,3 +440,36 @@ def submit_edp_to_sapio(profile_id, study_id):
     Sapio().rec_man.store_and_commit()
 
     return {"status": "success", "message": f"EDP data submitted to Sapio Project {study_id} successfully."}
+
+
+def join_shared_edp_profile(profile, token):
+    type = profile["type"]
+    if type != "ei_edp":
+        return {"status": "error", "message": f"Profile {profile['_id']} is not an EDP profile."}
+    user = helpers.get_current_user()
+    if user.id == profile["user_id"]:
+        return {"status": "error", "message": f"Profile owner cannot join the profile."}
+
+    if user.email is None:
+        email = profile.get("customer_emails_tokens", {}).get(token, "")
+        if not email:
+            return {"status": "error", "message": f"User is not authorised to join the profile."}
+        #update user's email
+        user.email = email
+        user.save()
+        
+    customer_emails = profile.get("customer_emails","")
+    if customer_emails:
+        emails = [email.strip() for email in customer_emails.split(";")
+                   if email.strip()]
+
+        if user.email in emails:
+            groups = CopoGroup().get_group_by_profile(profile_id=profile["_id"])
+            if not groups:
+                #create group for profile
+                group_id = CopoGroup().create_group_for_profile(profile_id=profile["_id"], group_name=profile["title"], owner_id=profile["user_id"])
+            else:
+                group_id = groups[0]["_id"]
+            CopoGroup().add_user_to_group(group_id=group_id, user_id=str(user.id))
+            return {"status": "success"}
+        return {"status": "error", "message": f"User {user.email} is not authorised to join the profile."}
