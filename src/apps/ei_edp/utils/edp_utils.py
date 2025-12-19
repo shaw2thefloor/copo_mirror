@@ -93,19 +93,18 @@ def post_save_edp_profile(profile):
         current_shared_users = CopoGroup().get_users_for_group_info(group_id=group_id)
  
         missing_user_emails = set(emails)
-        users = User.objects.filter(email__in = emails).values('id', 'email')
+        incorrect_shared_user_ids = [str(user["id"]) for user in current_shared_users if user.get("email","") not in emails]
+        users = User.objects.filter(email__in = emails).values('id', 'email','first_name')
         if users:
             missing_user_emails = set(emails) - {user["email"] for user in users}            
-
             new_shared_user = {str(user['id']) : user for user in users if 
-                                    user.id not in incorrect_shared_user_ids 
-                                    and user.email != current_user.email
+                                    user['id'] not in current_shared_users 
+                                    and user['email'] != current_user.email
                                 }
             CopoGroup().add_users_to_group(group_id=group_id, user_ids=list(new_shared_user.keys()))
             #send email to new_shared_user_ids to notify them of shared profile
-            Email().notify_shared_profile_to_existing_user(profile, new_shared_user, "")
+            Email().notify_shared_profile_to_existing_user(profile, new_shared_user.values())
 
-        incorrect_shared_user_ids = [str(user["id"]) for user in current_shared_users if user["email"] not in emails]
         CopoGroup().remove_users_from_group(group_id=group_id, user_ids=incorrect_shared_user_ids)
 
         if missing_user_emails:

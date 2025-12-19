@@ -17,7 +17,7 @@ class Email:
 
         if profile and customer_emails_token:
             for token, email in customer_emails_token.items():
-                    msg = f"<h4>COPO Profile Shared with You</h4><p>A COPO profile named '{profile.get('title', '')}' has been shared with you. Please use the link below to create your COPO account and access the profile.</p><p><a href='{uri}{reverse('copo:join_shared_profile', kwargs={'profile_id':str(profile["_id"]), 'token':token})}>Create COPO Account</a></p>"
+                    msg = f"<h4>COPO Profile Shared with You</h4><p>A COPO profile named '{profile.get("title", "")}' has been shared with you. Please use the link below to create your COPO account and access the profile.</p><p><a href='{uri}{reverse("copo:join_shared_profile", kwargs={"profile_id":str(profile["_id"]), "token":token})}'>Create COPO Account</a></p>"
                     CopoEmail().send(to=[email], sub=subj, content=msg, html=True)
 
     def notify_shared_profile_to_existing_user(self, profile, users):
@@ -28,8 +28,8 @@ class Email:
 
         if profile and users:
             for user in users:
-                msg = f"Dear {user.first_name}, <h4>COPO Profile Shared with You</h4><p>A COPO profile named '{profile.get('title', '')}' has been shared with you. Please log in to your COPO account to access the profile.</p>"
-                CopoEmail().send(to=[ user.email], sub=subj, content=msg, html=True)
+                msg = f"Dear {user["first_name"]}, <h4>COPO Profile Shared with You</h4><p>A COPO profile named '{profile.get('title', '')}' has been shared with you. Please log in to your COPO account to access the profile.</p>"
+                CopoEmail().send(to=[ user["email"]], sub=subj, content=msg, html=True)
     
     def _get_uri(self):
         uri = ThreadLocal.get_current_request().build_absolute_uri('/')
