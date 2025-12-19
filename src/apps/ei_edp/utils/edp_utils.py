@@ -95,7 +95,7 @@ def post_save_edp_profile(profile):
         missing_user_emails = set(emails)
         users = User.objects.filter(email__in = emails).values('id', 'email')
         if users:
-            missing_user_emails = set(emails) - {user.email for user in users}            
+            missing_user_emails = set(emails) - {user["email"] for user in users}            
 
             new_shared_user = {str(user['id']) : user for user in users if 
                                     user.id not in incorrect_shared_user_ids 
