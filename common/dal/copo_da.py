@@ -1113,7 +1113,7 @@ class CopoGroup(DAComponent):
 
     def add_user_to_group(self, group_id, user_id):
         return self.Group.update_one(
-            {'_id': ObjectId(group_id)}, {'$push': {'member_ids': user_id}}
+            {'_id': ObjectId(group_id)}, {'$addToSet': {'member_ids': user_id}}
         )
 
     def remove_user_from_group(self, group_id, user_id):
@@ -1149,9 +1149,13 @@ class CopoGroup(DAComponent):
 
     def add_users_to_group(self, group_id, user_ids):
         return self.Group.update_one(
-            {'_id': ObjectId(group_id)}, {'$push': {'member_ids': {"$each": user_ids}}}
+            {'_id': ObjectId(group_id)}, {'$addToSet': {'member_ids': {"$each": user_ids}}}
         )
-
+    
+    def remove_users_from_group(self, group_id, user_ids):
+        return self.Group.update_one(
+            {'_id': ObjectId(group_id)}, {'$pull': {'member_ids': {"$in": user_ids}}}
+        )
 
 class DataFile(DAComponent):
     def __init__(self, profile_id=None, subcomponent=None):

@@ -33,6 +33,7 @@ from common.schemas.utils import data_utils
 from common.utils.helpers import get_group_membership_asString
 from src.apps.copo_core.models import ProfileType
 from bson.errors import InvalidId
+from django.shortcuts import redirect
 
 LOGGER = settings.LOGGER
 
@@ -704,12 +705,12 @@ def remove_user_from_group(request):
 def join_shared_profile(request, profile_id, token):
     profile = Profile().get_record(profile_id)
     if isinstance(profile,InvalidId):
-        return HttpResponseBadRequest(json.dumps({'resp': 'Profile Not Found'}))
+        return HttpResponseBadRequest('Profile Not Found')
     if profile["type"] == "ei_edp":
         result = join_shared_edp_profile(profile, token)
         if result['status'] == 'success':
-            return HttpResponse(json.dumps({'resp': 'You have successfully joined this profile'}))
+            return redirect("copo_profile_index:index", permanent=True)
         else:
-            return HttpResponseBadRequest(json.dumps({'resp': result['message']}))
+            return HttpResponseBadRequest(result['message'])
     else:        
-        return HttpResponseBadRequest(json.dumps({'resp': 'You are not authorised to join this profile'}))
+        return HttpResponseBadRequest('You are not authorised to join this profile')
