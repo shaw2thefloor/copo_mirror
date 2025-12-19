@@ -229,7 +229,7 @@ class EDPSchemasHandler(SingleCellSchemasHandler):
                         worksheet.column_dimensions[get_column_letter(column_index)].hidden = True
                     else:
                         #unprotect the cell of the column
-                        for i in range(1, len(samples_under_project) ):
+                        for i in range(1, len(samples_under_project)+1 ):
                             cell_under_column = worksheet.cell(row=title_row+i, column=column_index)
                             cell_under_column.protection = Protection(locked=False)
 
@@ -299,7 +299,8 @@ class EDPSchemasHandler(SingleCellSchemasHandler):
                     if field["term_name"] in lookup_mapping.keys():
                         column_letter = get_column_letter(column_index)
                         worksheet[f"{column_letter}{title_row + 1}"] = ArrayFormula(f"{column_letter}{title_row + 1}:{column_letter}{data_row_index}", f"=LOOKUP((I{title_row + 1}:I{data_row_index}),sample_metadata!$A:$A, sample_metadata!${lookup_mapping[field["term_name"]]}:${lookup_mapping[field["term_name"]]})")
-                            
+                    
+                    #move sample_metadata sheet to the end                
                     workbook.move_sheet(workbook["sample_metadata"], offset = 10)
 
         workbook.save(file_path)
