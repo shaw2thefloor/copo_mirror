@@ -76,7 +76,8 @@ services:
       - DJANGO_SUPERUSER_EMAIL=admin@test.com
       - http_protocol=http
       - ZENODOURL=https://zenodo.org/api
-      - ZENODOTOKEN=${ZENODOTOKEN}    
+      - ZENODOTOKEN=${ZENODOTOKEN}
+      - ENA_BROWSER_SERVICE=https://www.ebi.ac.uk/ena/browser/api
       - SAPIO_USERNAME=${SAPIO_USERNAME}
       - SAPIO_PASSWORD=${SAPIO_PASSWORD}
       - SAPIO_API_URL=${SAPIO_API_URL}
@@ -178,14 +179,15 @@ services:
   #    - MAX_QUEUE_LENGTH=10
   #    - PREBOOT_QUANTITY=2
 
-  edp:
-    image: python:3.10.13-bullseye
-    command: sleep infinity
-    volumes:
-      - /Users/zef22hak/development/EDP:/EDP
-    environment:
-      - SAPIOURL=${SAPIOURL}
-      - SAPIOGUID=${SAPIOGUID}
-      - SAPIOTOKEN=${SAPIOTOKEN}
-      - ZENODOURL=https://zenodo.org/api
-      - ZENODOTOKEN=${ZENODOTOKEN}
+
+  #edp:
+  #  image: python:3.10.13-bullseye
+  #  volumes:
+  #  command: sleep infinity
+  #    - /Users/zef22hak/development/EDP:/EDP
+  #  environment:
+  #    - SAPIOGUID=${SAPIOGUID}
+  #    - SAPIOURL=${SAPIOURL}
+  #    - SAPIOTOKEN=${SAPIOTOKEN}
+  #    - ZENODOURL=https://zenodo.org/api
+  #    - ZENODOTOKEN=${ZENODOTOKEN}
