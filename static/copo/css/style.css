@@ -1713,6 +1713,12 @@ table.dataTable td.focus {
   width: 330px !important;
 }
 
+.searchable-select-tooltip .tooltip-inner {
+  max-width: 420px !important;
+  white-space: normal;
+  vertical-align: middle !important;
+  text-align: left;
+}
 /*form control focus*/
 
 .copo-form-control-focus {

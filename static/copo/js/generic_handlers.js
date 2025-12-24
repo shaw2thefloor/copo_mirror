@@ -3074,6 +3074,7 @@ function do_page_controls(componentName) {
   */
   generate_component_control(componentName, profile_type);
   initialiseComponentDropdownMenu();
+  initialiseComponentDropdownTooltips();
   setComponentIcon(componentName);
 } //end of func
 
@@ -4041,18 +4042,44 @@ function initialiseComponentDropdownMenu() {
       return data.text;
     },
     templateResult: function (data) {
-      if (!data || !data.id || !data.text) return data.text || ''; // placeholder or empty
+      if (!data || !data.id || !data.text) return data.text || ''; // Placeholder or empty
+
+      const $option = $(data.element);
+      const description = $option.data('description') || '';
+      let text = data.text;
+      let hasAsterisk = false;
+
       // Check if any of the dropdown options begin with an asterisk (*)
       // If yes, render a red asterisk and display the rest of the text
-      if (/^\*\s*/.test(data.text)) {
-        const text = data.text.replace(/^\*\s*/, '');
-        return `<span class="asterisk" aria-hidden="true">*</span>${text}`;
+      if (/^\*\s*/.test(text)) {
+        text = text.replace(/^\*\s*/, '');
+        hasAsterisk = true;
       }
-      return data.text;
+
+      const $result = $('<span></span>').text(text);
+
+      if (description) {
+        // Build Bootstrap tooltip element
+        $result
+          .attr('data-toggle', 'tooltip')
+          .attr('data-placement', 'right')
+          .attr('data-description', description);
+      }
+
+      if (hasAsterisk) {
+        $result.prepend('<span class="asterisk" aria-hidden="true">*</span> ');
+      }
+
+      return $result;
     },
     escapeMarkup: function (markup) {
       return markup; // Allow HTML elements
     },
+  });
+
+  // Add custom class to container
+  $selectOption.each(function () {
+    $(this).data('select2').$container.addClass('searchable-select-container');
   });
 
   const $firstOption = $('.searchable-select option')
@@ -4064,6 +4091,57 @@ function initialiseComponentDropdownMenu() {
   if ($firstOption.length) {
     $selectOption.val($firstOption.val()).trigger('change');
   }
+}
+
+function initialiseComponentDropdownTooltips() {
+  // Initialise Bootstrap tooltip
+  $(document).on(
+    'mouseenter',
+    '.select2-container--open .select2-results__option',
+    function () {
+      const $el = $(this);
+
+      if (!$el.attr('id')) return; // Skip placeholders or empty items
+
+      // Avoid tooltip re-initialisation
+      if ($el.data('bs.tooltip')) {
+        $el.tooltip('show');
+        return;
+      }
+      // Get description from rendered span
+      const description = $el
+        .find('span[data-description]')
+        .data('description');
+      if (!description) return;
+
+      // Hide any existing tooltips
+      $('.tooltip').tooltip('hide');
+
+      $el
+        .attr('title', description)
+        .tooltip({
+          container: 'body',
+          placement: 'right',
+          trigger: 'manual',
+          template: `<div class="tooltip searchable-select-tooltip" role="tooltip">
+            <div class="tooltip-arrow"></div>
+            <div class="tooltip-inner"></div>
+            </div>`,
+        })
+        .tooltip('show');
+    }
+  );
+
+  $(document).on(
+    'mouseleave',
+    '.select2-container--open .select2-results__option',
+    function () {
+      const $el = $(this);
+      if ($el.data('bs.tooltip')) {
+        $el.tooltip('hide');
+      }
+    }
+  );
 }
 
 function initialiseNavToggle() {
@@ -4350,7 +4428,7 @@ function moveComponentInfoToTabContent() {
         return this.nodeType === 3; // text nodes
       })
       .wrap('<span class="alert-message"></span>');
-    
+
     // Observe style changes to add/remove 'in' class for fade effect
     const observer = new MutationObserver((mutationsList) => {
       mutationsList.forEach((mutation) => {
