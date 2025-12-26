@@ -4031,24 +4031,32 @@ function initialiseComponentDropdownMenu() {
     placeholder: 'Choose an option',
     allowClear: false,
     templateSelection: function (data) {
-      if (!data || !data.id || !data.text) return data.text || '';
+      if (!data || !data.id || !data.text) return data.text || ''; // Placeholder or empty
+
       // Check if the selected option begins with an asterisk (*)
       // If yes, render a red asterisk and display the rest of the text
-      if (/^\*\s*/.test(data.text)) {
-        const text = data.text.replace(/^\*\s*/, '');
-        return `<span class="asterisk" aria-hidden="true">*</span>${text}`;
+      const $el = $(data.element);
+      const $selection = $('<span>').text(data.text);
+
+      if ($el.data('asterisk')) {
+        $selection.attr('data-asterisk', 'true');
       }
-      return data.text;
+
+      return $selection;
     },
     templateResult: function (data) {
-      if (!data || !data.id || !data.text) return data.text || ''; // placeholder or empty
+      if (!data || !data.id || !data.text) return data.text || ''; // Placeholder or empty
+
       // Check if any of the dropdown options begin with an asterisk (*)
       // If yes, render a red asterisk and display the rest of the text
-      if (/^\*\s*/.test(data.text)) {
-        const text = data.text.replace(/^\*\s*/, '');
-        return `<span class="asterisk" aria-hidden="true">*</span>${text}`;
+      const $el = $(data.element);
+      const $result = $('<span>').text(data.text);
+
+      if ($el.data('asterisk')) {
+        $result.attr('data-asterisk', 'true');
       }
-      return data.text;
+
+      return $result;
     },
     escapeMarkup: function (markup) {
       return markup; // Allow HTML elements

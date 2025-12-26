@@ -2389,20 +2389,14 @@ div.shown span.side-help-trigger:before {
   vertical-align: bottom;
 }
 
-/* Asterisk styles in forms */
+/* Asterisk styles */
 .form .requiredField .asteriskField {
   color: red;
 }
 
-/* Asterisk styles */
-.asterisk {
-  color: red;
-  font-weight: bold;
-  margin-right: 2px;
-}
-
-.select2-results__option .asterisk,
-.select2-selection__rendered .asterisk {
+.select2-results__option span[data-asterisk="true"]::before,
+.select2-selection__rendered span[data-asterisk="true"]::before {
+  content: "*";
   color: red;
   font-weight: bold;
   margin-right: 2px;
