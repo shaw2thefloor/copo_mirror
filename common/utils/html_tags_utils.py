@@ -522,7 +522,8 @@ def generate_table_records(profile_id=str(), da_object=None, record_id=str(), ad
 
         for x in schema:
             x["id"] = x["id"].split(".")[-1]
-            columns.append(dict(data=x["id"], title=x["label"], defaultContent='', render="render_ena_accession_function" if x["id"].lower().endswith("accession") else "" ))
+            #  columns.append(dict(data=x["id"], title=x["label"], defaultContent='', render="render_ena_accession_function" if x["id"].lower().endswith("accession") else "" ))
+            columns.append(dict(data=x["id"], title=x["label"], defaultContent='', render=d_utils.get_render_function(x["id"])))
             if x["id"] not in df_columns:
                 df[x["id"]] = str()
             df[x["id"]] = df[x["id"]].fillna('')

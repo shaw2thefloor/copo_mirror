@@ -1273,3 +1273,12 @@ class DecoupleFormSubmission:
                 if v:
                     # set some global value
                     self.object_has_value = True
+
+
+def get_render_function(x):
+    copo_labels = ['manifest_id']
+    if x in  copo_labels:
+        return 'renderCopoAccessionFunction'
+    if x.lower().endswith('accession'):
+        return 'render_ena_accession_function'
+    return ''

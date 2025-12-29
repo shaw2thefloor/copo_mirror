@@ -80,6 +80,18 @@ function render_zenodo_accession_function(data, type, row, meta) {
   }
 }
 
+function renderCopoAccessionFunction(data, type, row, meta, apiUrl = 'manifest/') {
+  if (data == null || data == '') return '';
+  
+  if (type === 'display') {
+    const baseUrl = window.location.origin; // e.g. https://copo-project.org
+    const url = `${baseUrl}/api/${apiUrl}${data}`;
+    return `<a href="${url}">${data}</a>`; // Opens in same tab
+  } else {
+    return data;
+  }
+}
+
 function addComponentMessage(componentName) {
   // Adds additional information to the component page
   let pageDescription = $('.page-welcome-message-template').find(
