@@ -12,4 +12,4 @@ class Validator:
         self.first_data_line_no = kwargs.get("first_data_line_no", 2)
 
     def validate(self):
-        raise NotImplemented
+        raise NotImplementedError

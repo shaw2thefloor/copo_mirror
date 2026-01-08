@@ -19,15 +19,9 @@ import json
 from io import BytesIO
 from pyld import jsonld
 from django.urls import reverse
-from openpyxl import load_workbook
-from openpyxl.styles import Font, NamedStyle,PatternFill, Alignment, Border, Side
-from openpyxl.comments import Comment
-from openpyxl.worksheet.protection import SheetProtection
-from openpyxl.worksheet.datavalidation import DataValidation 
-from common.dal.profile_da import Profile
+from .validator.validation_message import MESSAGES
 
 l = Logger()
-
 
 class SingleCellSchemasHandler:
     # def __init__(self):
@@ -505,9 +499,13 @@ class SingleCellSchemasHandler:
                         # Protect the worksheet
                         writer.sheets[sheet_name].protect()
 
-                if "data_values" in writer.sheets:
-                    writer.sheets["data_values"].protect()
-                    writer.sheets["data_values"].hide()
+                    if "data_values" in writer.sheets:
+                        writer.sheets["data_values"].protect()
+                        writer.sheets["data_values"].hide()
+                    #write a secret worksheet to keep the checklist id
+                    secret_sheet = writer.book.add_worksheet(f"checklist_{checklist_id}")
+                    secret_sheet.protect()
+                    secret_sheet.hide()
 
                 """
                     for sheet in writer.sheets.values():
@@ -702,167 +700,6 @@ class SingleCellSchemasHandler:
                 with open(file_path, "w") as outfile:
                     outfile.write(json.dumps(compacted))
 
-"""
-class EDPSchemasHandler(SingleCellSchemasHandler):
-    def write_manifest(self, profile_id, singlecell_schema, checklist_id=None, singlecell=None, file_path=None, format="xlsx", request=None):
-        schema_name = singlecell_schema["name"]
-        schemas = singlecell_schema["schemas"]
-        checklists = singlecell_schema["checklists"]
-        # component_names = singlecell_schema["components"]
-
-        profile = Profile().get_record(profile_id)
-        if not profile:
-            raise Exception(f"Profile {profile_id} not found")
-
-        # Cell formats
-        unlocked_format = {'locked': False, 'text_wrap': True, "valign": "top"}
-
-        alignment = Alignment(wrap_text=True, vertical="center", horizontal="center")
-        font = Font(bold=True)
-        bolder = Border(left=Side(style='medium'), right=Side(style='medium'), top=Side(style='medium'), bottom=Side(style='medium'))
-        mandatory_style = NamedStyle(name="mandatory_style")
-        mandatory_style.font = font
-        mandatory_style.fill = PatternFill(fgColor="A6C875", fill_type = "solid")
-        mandatory_style.alignment = alignment
-        mandatory_style.border = bolder
-        optional_style = NamedStyle(name="optional_style")
-        optional_style.font = font
-        optional_style.fill = PatternFill(fgColor="90D5FF", fill_type = "solid")
-        optional_style.alignment = alignment
-        optional_style.border = bolder
-        protected_style = NamedStyle(name="protected_style")
-        protected_style.font = font
-        protected_style.fill = PatternFill(fgColor="D3D3D3", fill_type = "solid")
-        protected_style.alignment = alignment
-        protected_style.border = bolder
-
-        desc_eg_format = {'text_wrap': True, 'italic': True, 'font_color': '#808080'}
-
-        separator_format = {
-            'bold': True,
-            'align': 'left',
-            'valign': 'vcenter',
-            'bg_color': '#B5EAAA',
-        }
-
-        version = settings.MANIFEST_VERSION.get(schema_name, str())
-        if version:
-            version = "_v" + version
-
-        workbook = load_workbook(settings.SINGLE_CELL_SCHEMAS_TEMPLATE_URL["EI_EDP"])
-        worksheet_sample = workbook["Sample Manifest"]
-        worksheet_sample["F5"] = profile.get("jira_ticket_number", "")
-        worksheet_index = workbook["Index Information"]
-
-        for checklist in checklists.keys():
-            if checklist_id and checklist_id != checklist:
-                continue
-
-            schema_checklist = checklist
-            if not checklist_id or file_path is None:
-                file_path = os.path.join(
-                    settings.MANIFEST_PATH,
-                    settings.MANIFEST_FILE_NAME.format(
-                        schema_name + "_" + checklist, version
-                    ),
-                )
-            for component_name, schema in schemas.items():
-                if component_name == "study":
-                    continue
-
-                component_schema_df = pd.DataFrame.from_records(schema)
-                component_schema_df = component_schema_df.drop(
-                    component_schema_df[
-                        pd.isna(component_schema_df[schema_checklist])
-                    ].index
-                )
-
-                if component_schema_df.empty:
-                    continue
-
-                component_schema_df.fillna("", inplace=True)
-                component_schema_df["choice"] = component_schema_df[
-                    component_schema_df["term_type"].isin(["enum", "suggested_enum"])
-                ]["term_name"].apply(
-                    lambda x: singlecell_schema.get("enums", []).get(x, [])
-                )
-
-                title_row = 1
-                if component_name == "sample":
-                    worksheet = workbook["Sample Manifest"]
-                    title_row = 28
-                elif component_name == "index":
-                    worksheet = workbook["Index Information"]
-                    title_row = 1                        
-                column_index = 0
-                for _, field in component_schema_df.iterrows():
-                    column_index += 1
-                    name = field["term_label"]
-                    cell = worksheet.cell(row=title_row, column=column_index)
-                    cell.value = name
-                    description = field.get("term_description", name)
-                    if description:
-                        comment = Comment(field.get("term_description", name), "COPO")
-                        cell.comment = comment
-                    if field[checklist] == "M":    
-                        cell.style = mandatory_style                                            
-                    elif field[checklist] == "O":
-                        cell.style = optional_style
-                    if field["term_manifest_behavior"] == "protected":
-                        cell.style = protected_style
-                        if title_row > 1:
-                            cell_highlight = worksheet.cell(row=title_row-1, column=column_index)
-                            cell_highlight.fill = protected_style.fill
-
-                    elif field["term_manifest_behavior"] == "hidden":
-                        worksheet.column_dimensions[get_column_letter(column_index)].hidden = True
-
-                    type = field.get("term_type", "string")
-                    if type in ["enum", "suggested_enum"]:
-                        # Create a data-validation object with list validation
-                        options = field["choice"]
-                        if len(options) > 0:
-                            dv = DataValidation(
-                                type="list",
-                                formula1='"' + ",".join(options) + '"',
-                                allow_blank=True,
-                                #prompt = description if description else "",
-                            )
-                            # Add the data-validation object to the worksheet
-                            cell_start_end = '%s%d:%s%d' % (
-                                get_column_letter(column_index),
-                                title_row + 1,
-                                get_column_letter(column_index),
-                                1000,
-                            )
-                            worksheet.add_data_validation(dv)
-                            dv.add(cell_start_end)
-                    elif type == "string":
-                        length = field["term_length"]
-                        if length and int(length) > 0:
-                            cell_start_end = '%s%d:%s%d' % (
-                                get_column_letter(column_index),
-                                title_row + 1,
-                                get_column_letter(column_index),
-                                1000,
-                            )
-                            dv = DataValidation(
-                                type="textLength",
-                                operator="lessThanOrEqual",
-                                formula1=str(length),
-                                allow_blank=True,
-                                prompt="Please input the value with length less than or equal to " + str(length),
-                                #TBC stop on error
-
-                            )
-                            # Add the data-validation object to the worksheet
-                            worksheet.add_data_validation(dv)
-                            dv.add(cell_start_end)
-                        
-
-        workbook.save(file_path)
-"""
-
 
 class SinglecellschemasSpreadsheet:
     def __init__(
@@ -883,13 +720,9 @@ class SinglecellschemasSpreadsheet:
         self.validator_list = []
         self.schemas = None
         self.filenames = []
-        # if a file is passed in, then this is the first time we have seen the spreadsheet,
-        # if not then we are looking at creating samples having previously validated
         if file:
             self.file = file
-        # else:
-        #    self.sample_data = self.req.session.get( self.component_table, "")
-        #    self.isupdate = self.req.session.get("isupdate", False)
+ 
         # create list of required validators
 
         required = dict(globals().items())["required_validators"]
@@ -1015,7 +848,7 @@ class SinglecellschemasSpreadsheet:
         if duplicated_files:
             msg = (
                 msg
-                + "Duplicated files: "
+                + "Duplicate files: "
                 + ", ".join(duplicated_files)
                 + " in the manifest.<br/>"
             )
@@ -1053,18 +886,33 @@ class SinglecellschemasSpreadsheet:
                     )
 
                     if not isinstance(self.data, dict):
-                        raise Exception("invalid single cell manifest")
+                        raise Exception(MESSAGES["incorrect_manifest"])
+
+                    if not self.data:
+                        raise Exception("It is an empty file")
+
+                    if f"checklist_{self.checklist_id}" not in self.data.keys():
+                        #check if "checklist_xxxx" sheet exists for other checklist ids
+                        if any(key.startswith("checklist_") for key in self.data.keys()):
+                            raise Exception(MESSAGES["incorrect_manifest"])
+                        #continue in case it is a manifest without the secret sheet, an old manifest
 
                     # remove the data_values sheet which is used for dropdowns
                     self.data.pop("data_values", None)
+                    # remove the checklist id sheet which is used to store the checklist id
+                    self.data.pop(f"checklist_{self.checklist_id}", None)
+
 
                 else:
-                    raise Exception("Unknown file format")
+                    raise Exception(MESSAGES["incorrect_manifest"])
 
                 # if self.data.empty:
                 #    raise Exception("Empty file")
                 # profile = Profile().get_record(self.profile_id)
                 # schema_name = profile.get("schema_name", "COPO_SINGLE_CELL")
+
+                #remove empty worksheets
+                self.data = {k: v for k, v in self.data.items() if not v.empty}
 
                 for key, df in self.data.items():
                     df = df.iloc[3:]  # remove the first 3 rows
@@ -1077,42 +925,11 @@ class SinglecellschemasSpreadsheet:
                     df.fillna("", inplace=True)
                     self.data[key] = df
 
-                """
-                singlecell = (
-                    SinglecellSchemas()
-                    .get_collection_handle()
-                    .find_one({"name": self.schema_name}, {"schemas": 1, "enums": 1})
-                )
-                self.schemas = singlecell["schemas"]
-                """
                 if self.schemas:
-                    """
-                    for component in list(self.schemas.keys()):
-                        component_schema_df = pd.DataFrame.from_records(
-                            self.schemas[component]
-                        )
-                        component_schema_df = component_schema_df.drop(
-                            component_schema_df[
-                                pd.isna(component_schema_df[self.checklist_id])
-                            ].index
-                        )
-                        if component_schema_df.empty:
-                            self.schemas.pop(component, None)
-                            continue
-                        component_schema_df.fillna("", inplace=True)
-                        component_schema_df["choice"] = component_schema_df[
-                            component_schema_df["term_type"] == "enum"
-                        ]["term_name"].apply(lambda x: singlecell["enums"].get(x, []))
-                        component_schema_df["mandatory"] = component_schema_df[
-                            self.checklist_id
-                        ]
-                        component_schema_df.set_index(keys="term_name", inplace=True)
 
-                        self.schemas[component] = component_schema_df.to_dict("index")
-                    """
                     for component, df in self.data.items():
-                        if not component in self.schemas.keys():
-                            raise Exception("Invalid worksheet: " + component)
+                        if component not in self.schemas.keys():
+                            raise Exception(MESSAGES["incorrect_manifest"])
                         new_column_name = {
                             name: name.replace(" (optional)", "", -1)
                             for name in df.columns.values.tolist()
@@ -1146,51 +963,60 @@ class SinglecellschemasSpreadsheet:
         flag = True
         errors = []
         warnings = []
-        self.isupdate = False
+        #self.isupdate = False
+        """
+        Validate mandatory field count only. Allow outdated files to pass through with warnings to minimize user friction 
+        (avoiding the hassle of re-downloading the latest manifest).
+        """
+        missing_mandatory_column_count = 0
 
-        # checklist = EnaChecklist().get_checklist(self.checklist_id)
-        # validate for required fields
+        skip_validation = False
 
         for component, df in self.new_data.items():
-            for v in self.required_validators:
+            if not skip_validation:
+                for v in self.required_validators:
+                    try:
+                        errors, warnings, flag, missing_mandatory_column_count  = v(
+                            profile_id=self.profile_id,
+                            schema=self.schemas[component],
+                            component=component,
+                            data=df,
+                            fields=None,
+                            errors=errors,
+                            warnings=warnings,
+                            flag=flag,
+                            missing_mandatory_column_count = missing_mandatory_column_count,
+                            first_data_line_no = self.schema_components.get(component, {}).get("first_data_line_no", 2)
+                        ).validate()
+
+                        if missing_mandatory_column_count > 0:
+                            flag = False    
+                            errors = [MESSAGES["incorrect_manifest"] ]
+                            warnings = []
+                            skip_validation = True
+                            break
+                    except Exception as e:
+                        l.exception(e)
+                        error_message = str(e).replace("<", "").replace(">", "")
+                        flag = False
+                        errors.append(error_message)
+        if not skip_validation:
+            for v in self.overall_validators:
                 try:
-                    errors, warnings, flag, self.isupdate = v(
+                    errors, warnings, flag = v(
                         profile_id=self.profile_id,
-                        schema=self.schemas[component],
-                        component=component,
-                        data=df,
+                        schemas=self.schemas,
+                        data=self.new_data,
                         fields=None,
                         errors=errors,
                         warnings=warnings,
                         flag=flag,
-                        isupdate=self.isupdate,
-                        first_data_line_no = self.schema_components.get(component, {}).get("first_data_line_no", 2)
                     ).validate()
                 except Exception as e:
                     l.exception(e)
                     error_message = str(e).replace("<", "").replace(">", "")
-
                     flag = False
                     errors.append(error_message)
-
-        for v in self.overall_validators:
-            try:
-                errors, warnings, flag, self.isupdate = v(
-                    profile_id=self.profile_id,
-                    schemas=self.schemas,
-                    data=self.new_data,
-                    fields=None,
-                    errors=errors,
-                    warnings=warnings,
-                    flag=flag,
-                    isupdate=self.isupdate,
-                ).validate()
-            except Exception as e:
-                l.exception(e)
-                error_message = str(e).replace("<", "").replace(">", "")
-
-                flag = False
-                errors.append(error_message)
 
         # send warnings
         if warnings:

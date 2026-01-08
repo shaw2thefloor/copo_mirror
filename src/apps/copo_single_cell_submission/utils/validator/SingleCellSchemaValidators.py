@@ -7,6 +7,7 @@ from common.validators.helpers import checkOntologyTerm, checkNCBITaxonTerm
 import requests
 from common.utils.helpers import get_env
 import xml.etree.ElementTree as ET
+from src.apps.copo_single_cell_submission.utils.validator.validation_message import MESSAGES
 
 ena_browser_service = get_env("ENA_BROWSER_SERVICE")
 session = requests.Session()
@@ -16,11 +17,17 @@ class MandatoryValuesValidator(Validator):
     def validate(self):
         schema = self.kwargs.get("schema", {})
         component = self.kwargs.get("component", "")
+        missing_mandatory_column_count = self.kwargs.get("missing_mandatory_column_count")
 
         for key, field in schema.items():
             if field.get("mandatory","") == "M":               
                 if key not in self.data.columns:
-                    self.errors.append("Sheet " + component + " : Mandatory column: '" + key + "' is missing")
+                    missing_mandatory_column_count += 1
+                    error_msg = MESSAGES["missing_column"].format(
+                        component=component, 
+                        field_name=key
+                    )
+                    self.errors.append(error_msg)
                     self.flag = False
                 else:
                     null_rows=[]
@@ -28,16 +35,21 @@ class MandatoryValuesValidator(Validator):
                     null_rows.extend(self.data[self.data[key] == ""].index.tolist())
                     null_rows.extend(self.data[self.data[key].isna()].index.tolist())
                     for row in null_rows:
-                        self.errors.append("Sheet %s : Missing data detected in column <strong>%s</strong> part at row <strong>%s</strong>." % (
-                            component, field["term_label"], str(row + self.first_data_line_no)))
+                        error_msg = MESSAGES["missing_value"].format(
+                            component=component,
+                            column_name=field["term_label"],
+                            line_no=row + self.first_data_line_no,
+                        )
+                        self.errors.append(error_msg)
                         self.flag = False
-        return self.errors, self.warnings, self.flag, self.kwargs.get("isupdate")
+        return self.errors, self.warnings, self.flag, missing_mandatory_column_count
 
 
 class IncorrectValueValidator(Validator):
     def validate(self):
         schema_map = self.kwargs.get("schema", {})
         component = self.kwargs.get("component", "")
+        missing_mandatory_column_count = self.kwargs.get("missing_mandatory_column_count")
 
         biosampleAccessions = Sample(profile_id=self.profile_id).get_all_records_columns(filter_by= {"biosampleAccession": {"$exists":True, "$ne": ""}})
         biosampleAccessionsMap = {}
@@ -58,44 +70,65 @@ class IncorrectValueValidator(Validator):
                         row = str(row).strip()
                         if type == "enum":
                             if row not in field.get("choice", []):
-                                self.errors.append( "Sheet <B>" + component + "</B> : Invalid value <B>" + row 
-                                                   + "</B> in column : <B>" + field["term_label"] 
-                                                   + "</B> at row " + str(i+self.first_data_line_no) + ". Valid values are: " + str(field.get("choice")))
+                                valid_values = [f"<li>{choice}</li>" for choice in field.get('choice', [])]
+                                error_msg = MESSAGES["invalid_column_value_with_list"].format(
+                                    component=component,
+                                    invalid_value=row,
+                                    column_name=field["term_label"],
+                                    line_no=i + self.first_data_line_no,
+                                    valid_values="<ul>"+"".join(valid_values)+"</ul>"
+                                )
+                                self.errors.append(error_msg)
                                 self.flag = False
                         elif type == "string":
                             regex = field.get("term_regex","")
                             if regex and pd.notna(regex):
                                 
                                 if not re.match(regex.strip(), str(row)):
-                                    self.errors.append("Sheet <B>" + component + "</B> : Invalid value <B>" + row 
-                                                       + "</B> in column : <B>" 
-                                                       + field["term_label"] + "</B> at row " 
-                                                       + str(i+self.first_data_line_no) + ". " 
-                                                       + field.get("term_error_message", "Valid value should match: " + str(regex)))
+                                    error_msg = MESSAGES["invalid_column_value_regex"].format(
+                                        component=component,
+                                        invalid_value=row,
+                                        column_name=field["term_label"],
+                                        line_no=i + self.first_data_line_no,
+                                        field_description=field.get("term_error_message","") or field.get("term_description",""),
+                                        regex_pattern=regex.strip()
+                                    )
+                                    self.errors.append(error_msg)
                                     self.flag = False
                         elif type == "ontology":   
                             reference = field.get("term_reference", "")
                             if reference:
                                 if reference == "NCBITaxon":
                                     if not checkNCBITaxonTerm(row):
-                                        self.errors.append("Sheet <B>" + component + "</B> : Invalid value <B>" 
-                                                           + row + "</B> in column : <B>" 
-                                                           + field["term_label"] + "</B> at row " 
-                                                           + str(i+self.first_data_line_no) + ". invalid NCBITaxon term")
+                                        error_msg = MESSAGES["invalid_column_value_ontology"].format(
+                                            component=component,
+                                            invalid_value=row,
+                                            column_name=field["term_label"],
+                                            line_no=i + self.first_data_line_no,
+                                            ontology_name="NCBITaxon"
+                                        )
+                                        self.errors.append(error_msg)
                                         self.flag = False
                                 else:
                                     #it should be "ontology_id:ancestor, i.e. EFO:0004466"
                                     ontology_id = reference.split(":")[0]
                                     ancestor = reference.split(":")[1]
                                     if not checkOntologyTerm(ontology_id, ancestor, row):
-                                        self.errors.append("Sheet <B>" + component + "</B> : Invalid value <B>" + row 
-                                                           + "</B> in column : <B>" 
-                                                           + field["term_label"] + "</B> at row " 
-                                                           + str(i+self.first_data_line_no) 
-                                                           + ". invalid ontology term for : " + str(reference))
+                                        error_msg = MESSAGES["invalid_column_value_ontology"].format(
+                                            component=component,
+                                            invalid_value=row,
+                                            column_name=field["term_label"],
+                                            line_no=i + self.first_data_line_no,
+                                            ontology_name=str(reference)
+                                        )
+                                        self.errors.append(error_msg)
                                         self.flag = False
                             else:
-                                self.errors.append("Sheet <B>" + component + "</B> : Ontology term reference is missing for column : '" + field["term_label"] + "'")
+                                error_msg = MESSAGES["missing_ontology_term"].format(
+                                    component=component,
+                                    column_name=field["term_label"]
+                                )
+                                self.errors.append(error_msg)
                                 self.flag = False
 
                         elif type == "BIOSAMPLEACCESSION_FIELD":
@@ -116,34 +149,48 @@ class IncorrectValueValidator(Validator):
                                             else :
                                                 user_taxon_id = str(int(user_taxon_id))
                                             if taxon_id != user_taxon_id:
-                                                self.errors.append("Sheet <B>" + component + "</B> : Invalid value <B>" 
-                                                                   + str(user_taxon_id) + "</B> not match with <B>" + str(taxon_id) 
-                                                                   + f"</B> for biosample {row} in column: <B>TAXON_ID</B> at row " 
-                                                                   + str(i+self.first_data_line_no)) 
+                                                error_msg = MESSAGES["mismatched_value"].format(
+                                                    component=component,
+                                                    invalid_value=user_taxon_id,
+                                                    column_name="TAXON_ID",
+                                                    line_no=i + self.first_data_line_no,
+                                                    biosampleAccession=row
+                                                )
+                                                self.errors.append(error_msg) 
                                                 self.flag = False
                                         if scientific_name :
                                             user_scientific_name = self.data.loc[i].get("scientific_name","")
                                             if scientific_name != user_scientific_name:
-                                                self.errors.append("Sheet <B>" + component + "</B> : Invalid value <B>" 
-                                                                   + user_scientific_name 
-                                                                   + "</B> not match with <B>" + scientific_name 
-                                                                   + f"</B> for biosample {row} in column: <B>SCIENTIFIC_NAME</B> at row " 
-                                                                   + str(i+self.first_data_line_no)) 
+                                                error_msg = MESSAGES["mismatched_value"].format(
+                                                    component=component,
+                                                    invalid_value=user_scientific_name,
+                                                    column_name="SCIENTIFIC_NAME",
+                                                    line_no=i + self.first_data_line_no,
+                                                    biosampleAccession=row
+                                                )
+                                                self.errors.append(error_msg) 
                                                 self.flag = False
                                             #else:
                                             #    self.data[f"{Validator.PREFIX_4_NEW_FIELD}sraAccession"] = sample_accession
                                     else:
-                                        self.errors.append("Sheet <B>" + component + "</B> : Invalid value <B>" + row 
-                                                           + "</B> in column: <B>"
-                                                           + field["term_label"] + "</B> at row " 
-                                                           + str(i+self.first_data_line_no)) 
+                                        error_msg = MESSAGES["invalid_column_value_generic"].format(
+                                            component=component,
+                                            invalid_value=row,
+                                            column_name=field["term_label"],
+                                            line_no=i + self.first_data_line_no,
+                                            expected_value="a valid Biosample Accession"
+                                        )
+                                        self.errors.append(error_msg) 
                                         self.flag = False
                                 except Exception as e:
                                     lg.exception(e)
-                                    self.errors.append("Sheet <B>" + component + "</B> : Invalid value <B>" 
-                                                       + row + "</B> in column: <B>" 
-                                                       + field["term_label"] + "</B> at row " 
-                                                       + str(i+self.first_data_line_no))
+                                    error_msg = MESSAGES["biosampleAccession_validation_exception"].format(
+                                        component=component,
+                                        biosampleAccession=row,
+                                        column_name=field["term_label"],
+                                        line_no=i + self.first_data_line_no
+                                    )
+                                    self.errors.append(error_msg)
                                     self.flag = False
 
                             else:
@@ -151,28 +198,40 @@ class IncorrectValueValidator(Validator):
                                     value = self.data.loc[i].get(key,"")
                                     sample = biosampleAccessionsMap.get(row)
                                     if key in sample and sample[key] and sample[key] != value:
-                                        self.errors.append("Sheet <B>" + component + "</B> : Invalid value <B>" 
-                                                           + value + "</B> not match with <B>" 
-                                                           + sample.get(key,"")
-                                                           + "</B> in column: <B>" + key 
-                                                           + "</B> at row " + str(i+self.first_data_line_no)) 
+                                        error_msg = MESSAGES["mismatched_value"].format(
+                                            component=component,
+                                            invalid_value=value,
+                                            column_name=field["term_label"],
+                                            line_no=i + self.first_data_line_no,
+                                            biosampleAccession=row
+                                        )
+                                        self.errors.append(error_msg) 
                                         self.flag = False
                                                                     
                 if is_identifier:
                     df = self.data[column].groupby(self.data[column]).filter(lambda x: len(x) >1).value_counts()
                     for index, row in df.items():
-                        self.errors.append("Sheet <B>" + component + "</B> : Invalid value <B>" + index 
-                                           + "</B> in column : <B>" + column 
-                                           + "</B> : duplicated " + ( "twice" if row == 2 else  str(row) ) +" times." )
+                        error_msg = MESSAGES["identifier_column_not_unique"].format(
+                            component=component,
+                            column_name=field["term_label"],
+                            invalid_value=index
+                        )
+                        self.errors.append(error_msg)
                         self.flag = False                                         
             else:
-                self.errors.append("Sheet <B>" +component + "</B> : Invalid column : '" + column +"'")
-                self.flag = False
-        return self.errors, self.warnings, self.flag, self.kwargs.get("isupdate")
+                error_msg = MESSAGES["invalid_column"].format(
+                    component=component,
+                    column_name=column
+                )
+                self.warnings.append(error_msg)
+                #self.flag = False
+        return self.errors, self.warnings, self.flag, missing_mandatory_column_count
 
 class StudyComponentValidator(Validator):
     def validate(self):
         component = self.kwargs.get("component", "")
+        missing_mandatory_column_count = self.kwargs.get("missing_mandatory_column_count")
+
         if component == "study":
             if len(self.data) == 0:
                 self.errors.append("Study component is missing")
@@ -181,4 +240,4 @@ class StudyComponentValidator(Validator):
             elif len(self.data) > 1:
                 self.errors.append("Only one study is allowed")
                 self.flag = False
-        return self.errors, self.warnings, self.flag, self.kwargs.get("isupdate")
+        return self.errors, self.warnings, self.flag, missing_mandatory_column_count

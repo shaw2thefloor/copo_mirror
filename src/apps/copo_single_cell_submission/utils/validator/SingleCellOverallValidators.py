@@ -1,7 +1,7 @@
 from common.validators.validator import Validator
 from django.conf import settings
 import pandas as pd
- 
+from src.apps.copo_single_cell_submission.utils.validator.validation_message import MESSAGES
 
 lg = settings.LOGGER
 class ForeignKeyValidator(Validator):
@@ -36,11 +36,26 @@ class ForeignKeyValidator(Validator):
                     self.errors.append("Sheet <B>" + component + "</B>: Referenced component: '" + referenced_component_dict["referenced_component"] + "' is missing")
                     self.flag = False
                 else:
+                    component_schema = schemas.get(component, {})
+
                     for index, row in df.iterrows():
                         foreign_key =  referenced_component_dict["foreign_key"]
                         referenced_component = referenced_component_dict["referenced_component"]
+
                         if referenced_component and row[foreign_key] and row[foreign_key] not in self.data[referenced_component][identifier_map[referenced_component]].values:
-                            self.errors.append( "Sheet <B>" + component + "</B>: <B>" + row[foreign_key] + "</B> at row " + str(index + 2) + " is missing in the referenced sheet : <B>" + referenced_component + "</B> and column : <B>" + identifier_map[referenced_component] +"</B>.")
+                            label_for_foreign_key = component_schema.get(foreign_key, {})["term_label"]
+                            referenced_component_schema = schemas.get(referenced_component, {})
+                            label_for_reference_column = referenced_component_schema.get(identifier_map[referenced_component], {})["term_label"]
+
+                            error_msg = MESSAGES["missing_referenced_value"].format(
+                                component=component,
+                                invalid_value=row[foreign_key],
+                                column_name=label_for_foreign_key or foreign_key,
+                                line_no=index + self.first_data_line_no,
+                                referenced_component=referenced_component,
+                                reference_column_name=label_for_reference_column
+                            )
+                            self.errors.append(error_msg)
                             self.flag = False
 
-        return self.errors, self.warnings, self.flag, self.kwargs.get("isupdate")
+        return self.errors, self.warnings, self.flag
