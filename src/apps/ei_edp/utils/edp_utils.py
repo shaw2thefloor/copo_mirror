@@ -169,11 +169,12 @@ def post_save_edp_profile(profile):
             existing_no_of_samples = len(samples_under_project) if samples_under_project else 0
             sample_records = Sapio().dataRecordManager.add_data_records_with_data(data_type_name="Sample", 
                                                                                   field_map_list=[{"ExemplarSampleType": profile["sample_type"], 
-                                                                                                  "ContainerType": profile["container_type"]}
+                                                                                                  "ContainerType": profile["container_type"],
+                                                                                                  "C_LibraryType": profile.get("library_type","")}
                                                                                                   for _ in range(existing_no_of_samples, int(profile["no_of_samples"]))])
             samples : List[PyRecordModel] = Sapio().inst_man.add_existing_records(sample_records)
             project.add_children(samples)
-            samples_under_project.extend(samples)
+            samples_under_project.extend(samples)            
 
         #delete samples if more than required
         diff = len(samples_under_project) - int(profile["no_of_samples"])
@@ -197,6 +198,12 @@ def post_save_edp_profile(profile):
             samples_under_project = [s for s in samples_under_project if s not in samples_to_remove]
         
 
+        #update existing sample
+        for sample in samples_under_project:
+            sample.set_field_value("ExemplarSampleType", profile["sample_type"])
+            sample.set_field_value("ContainerType", profile["container_type"])
+            sample.set_field_value("C_LibraryType", profile.get("library_type",""))    
+        
         #attach plate to Sapio Project, assume it is  96 well plate (8 rows x 12 columns)
         #create plate if necessary        
         
