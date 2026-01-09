@@ -50,6 +50,7 @@ class SingleCellSchemasHandler:
         technology_df = pd.read_excel(xls, "technologies", index_col="key") if "technologies" in xls.sheet_names else pd.DataFrame()
         term_mapping_df = pd.read_excel(xls, "term_mapping", index_col="copo_name") if "term_mapping" in xls.sheet_names else pd.DataFrame()
         checklist_df = pd.read_excel(xls, "checklists", index_col="key") 
+        checklist_filter_df = pd.read_excel(xls, "checklists_filter",dtype=str) if "checklists_filter" in xls.sheet_names else pd.DataFrame()
         schemas_df = pd.read_excel(xls, "data")  
 
         enums_dict = {}
@@ -160,6 +161,7 @@ class SingleCellSchemasHandler:
         singlecell_dict["technologies"] = technology_df.to_dict("index")
         singlecell_dict["components"] = components_df.to_dict("index")
         singlecell_dict["checklists"] = checklist_df.to_dict("index")
+        singlecell_dict["checklists_filter"] = checklist_filter_df.to_dict("records")
         singlecell_dict["term_mapping"] = term_mapping_df.to_dict("index")
         singlecell_dict["name"] = schema_name
         singlecell_dict["deleted"] = 0
@@ -914,22 +916,25 @@ class SinglecellschemasSpreadsheet:
                 #remove empty worksheets
                 self.data = {k: v for k, v in self.data.items() if not v.empty}
 
-                for key, df in self.data.items():
-                    df = df.iloc[3:]  # remove the first 3 rows
-                    df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-                    df = df.apply(lambda x: x.astype("string"))
-                    df = df.apply(lambda x: x.str.strip())
-                    # remove the rows with all empty values or 0
-                    df = df.replace("", np.nan)
-                    df.dropna(how="all", inplace=True)
-                    df.fillna("", inplace=True)
-                    self.data[key] = df
-
                 if self.schemas:
+
+                    for key, df in self.data.items():
+                        #df = df.iloc[3:]  # remove the first 3 rows
+                        df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+                        df = df.apply(lambda x: x.astype("string"))
+                        df = df.apply(lambda x: x.str.strip())
+                        # remove the rows with all empty values or 0
+                        df = df.replace("", np.nan)
+                        df.dropna(how="all", inplace=True)
+                        df.fillna("", inplace=True)
+                        self.data[key] = df
 
                     for component, df in self.data.items():
                         if component not in self.schemas.keys():
                             raise Exception(MESSAGES["incorrect_manifest"])
+                        
+                        starting_line = self.schema_components.get(component, {}).get("first_data_line_no", 2)
+                        df = df.iloc[1+starting_line:]  # remove the first 3 rows
                         new_column_name = {
                             name: name.replace(" (optional)", "", -1)
                             for name in df.columns.values.tolist()

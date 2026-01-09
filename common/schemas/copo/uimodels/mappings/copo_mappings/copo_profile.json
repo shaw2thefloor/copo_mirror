@@ -370,6 +370,41 @@
       }
     },
     {
+      "help_tip": "Please input library type",
+      "required": "false",
+      "default_value": "",
+      "control_meta": {},
+      "versions": [
+        "ei_edp"
+      ],
+      "specifications": [
+        "ei_edp"
+      ],
+      "ref": "",
+      "deprecated": false,
+      "hidden": "false",
+      "label": "Library type",
+      "show_in_form": true,
+      "id": "copo.profile.library_type",
+      "type": "string",
+      "show_in_table": true,
+      "control": "select",
+      "option_values":[
+        {
+          "value": "",
+          "label": "-- Please select --"
+        },
+        {
+          "value": "Illumina premade library",
+          "label": "Illumina premade library"
+        },
+        {
+          "value": "PacBio  premade library",
+          "label": "PacBio  premade library"
+        }    
+      ]
+    },
+    {
       "help_tip": "Please input number of samples",
       "required": "true",
       "default_value": "",

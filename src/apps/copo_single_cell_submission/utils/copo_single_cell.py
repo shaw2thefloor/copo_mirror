@@ -25,6 +25,7 @@ user_token = get_env('WEBIN_USER').split("@")[0]
 session = requests.Session()
 session.auth = (user_token, pass_word)
 
+"""
 def _query_ena_file_processing_status(accession_no):
     result = ""
     url = f"{get_env('ENA_ENDPOINT_REPORT')}run-files/{accession_no}?format=json"
@@ -49,7 +50,8 @@ def _query_ena_file_processing_status(accession_no):
         except Exception as e:
             l.exception(e)
         return result
-    
+"""
+   
 def generate_singlecell_record(profile_id, checklist_id=str(), study_id=str(), schema_name=str()):
 
     data_set = {}

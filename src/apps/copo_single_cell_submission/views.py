@@ -410,6 +410,21 @@ def copo_singlecell(request, schema_name, profile_id, ui_component):
 
     checklists = []
     if singlecell_checklists:
+        #filter only checklists available for this profile
+        schema = SinglecellSchemas().get_collection_handle().find_one({"name": schema_name}, {"checklists_filter":1})
+        checklists_filter = schema.get("checklists_filter",[])
+        if checklists_filter:
+            checklists_filter_df = pd.DataFrame.from_records(checklists_filter)
+            columns = checklists_filter_df.columns
+            for col in columns:
+                if col != "key":
+                    checklists_filter_df = checklists_filter_df[(pd.isna(checklists_filter_df[col])) | (checklists_filter_df[col].astype(str).str.upper() == str(profile.get(col,"")).upper())]
+            singlecell_checklists_df = pd.DataFrame.from_dict(singlecell_checklists, orient="index")
+            singlecell_checklists_df.reset_index(inplace=True)
+            checklists_filter_df = checklists_filter_df.merge(singlecell_checklists_df, left_on="key", right_on="index", how="inner")
+            checklists_filter_df.set_index("key", inplace=True)
+            singlecell_checklists = checklists_filter_df.to_dict(orient="index")
+
         for key, item in singlecell_checklists.items():
             checklist = {"primary_id": key, "name": item.get("name", ""), "description": item.get("description", "")}
             checklists.append(checklist)
