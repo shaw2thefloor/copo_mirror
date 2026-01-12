@@ -345,6 +345,7 @@
       "help_tip": "Please input sample type",
       "required": "true",
       "default_value": "",
+      "placeholder": "select sample type",
       "control_meta": {},
       "versions": [
         "ei_edp"
@@ -374,6 +375,7 @@
       "required": "false",
       "default_value": "",
       "control_meta": {},
+      "placeholder": "select library type",
       "versions": [
         "ei_edp"
       ],
@@ -390,10 +392,6 @@
       "show_in_table": true,
       "control": "select",
       "option_values":[
-        {
-          "value": "",
-          "label": "-- Please select --"
-        },
         {
           "value": "Illumina premade library",
           "label": "Illumina premade library"
@@ -470,7 +468,8 @@
     {
       "help_tip": "Please select container type",
       "required": "true",
-      "default_value": "",
+      "default_value": "plate",
+      "placeholder": "select container type",
       "control_meta": {},
       "versions": [
         "ei_edp"
@@ -541,6 +540,27 @@
     "show_in_table": true,
     "control": "textarea",
     "regex": "^(?!.*\\.{2,})(?!.*-{2,})[\\w.-]+@[a-zA-Z\\d.-]+\\.[a-zA-Z]{2,}([ ;]{1,}(?!.*\\.{2,})(?!.*-{2,})[\\w.-]+@[a-zA-Z\\d.-]+\\.[a-zA-Z]{2,})*$"
+  },
+  {
+    "help_tip": "",
+    "required": "false",
+    "default_value": "",
+    "control_meta": {},
+    "versions": [
+      "ei_edp"
+    ],
+    "specifications": [
+      "ei_edp"
+    ],
+    "ref": "",
+    "deprecated": false,
+    "hidden": "false",
+    "label": "Customer Emails",
+    "show_in_form": false,
+    "id": "copo.profile.customer_emails_tokens",
+    "type": "string",
+    "show_in_table": false,
+    "control": "text"
   }
   ] ,
  

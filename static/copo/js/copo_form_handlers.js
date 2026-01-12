@@ -970,6 +970,17 @@ var dispatchFormControl = {
         return a.label.localeCompare(b.label);
       });
 
+      if (formElem.hasOwnProperty('placeholder')) {
+          $(`
+            <option 
+              ${formElem?.required == "true" ? 'disabled' : ''} 
+              selected value="">
+              -- ${formElem.placeholder} --
+            </option>
+           `).appendTo(selectCtrl);        
+        }
+      
+
       for (var i = 0; i < formElem.option_values.length; ++i) {
         var option = formElem.option_values[i];
         var lbl = '';
@@ -981,17 +992,14 @@ var dispatchFormControl = {
           lbl = option.label;
           vl = option.value;
         }
-        if (vl == 'required') {
-          $('<option disabled selected value>' + lbl + '</option>').appendTo(
-            selectCtrl
-          );
-        } else {
-          $('<option value="' + vl + '">' + lbl + '</option>').appendTo(
-            selectCtrl
-          );
-        }
+
+        $('<option value="' + vl + '">' + lbl + '</option>').appendTo(
+          selectCtrl
+        );
+      
       }
     }
+
     ctrlsDiv.append(selectCtrl);
 
     return get_form_ctrl(ctrlsDiv.clone(), formElem, elemValue);

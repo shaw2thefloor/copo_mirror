@@ -121,13 +121,11 @@ def get_control_options(f, profile_id=None):
         return COPOLookup(data_source=f.get('data_source', str()), profile_id=profile_id).broker_data_source()
 
     if isinstance(f["option_values"], dict):
-        if f.get("option_values", dict()).get("callback", dict()).get("function", str()):
-            call_back_function = f.get("option_values", dict()).get(
-                "callback", dict()).get("function", str())
-            parameter = f.get("option_values", dict()).get(
-                "callback", dict()).get("parameter", dict())
-            provider = f.get("option_values", dict()).get(
-                "callback", dict()).get("provider", str())
+        callback = f.get("option_values", dict()).get("callback", dict())
+        if callback.get("function", str()):
+            call_back_function = callback.get("function", str())
+            parameter = callback.get("parameter", dict())
+            provider = callback.get("provider", str())
             if provider:
                 obj = _get_class(provider)
                 option_values = getattr(obj, call_back_function)(**parameter)
@@ -222,6 +220,12 @@ def generate_copo_form(da_object=DAComponent(), target_id=str(), component_dict=
                 else:
                     form_schema.append(f)
             '''
+        #remove the value from the form_value if it is not shown_in_form
+        else:
+            value_name = f["id"].split(".")[-1]
+            if value_name in form_value:
+                form_value.pop(value_name, None)
+
     if form_value:
         form_value["_id"] = str(target_id)
     else:
