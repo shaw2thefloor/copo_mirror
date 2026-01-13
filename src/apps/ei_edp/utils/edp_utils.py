@@ -12,6 +12,8 @@ from common.utils import helpers
 import uuid
 from .email import Email
 
+CUSTOMER_EMAIL_SPLITTER = ";"
+
 l = Logger()
 
 def get_sapio_sample_type_options():
@@ -80,7 +82,7 @@ def post_save_edp_profile(profile):
     #share profile with customer in COPO
     customer_emails = profile.get("customer_emails","")
     if customer_emails:
-        emails = [email.strip() for email in customer_emails.split(";")
+        emails = [email.strip() for email in customer_emails.split(CUSTOMER_EMAIL_SPLITTER)
                    if email.strip()]
 
         group_id = None
@@ -99,17 +101,23 @@ def post_save_edp_profile(profile):
             missing_user_emails = set(emails) - {user["email"] for user in users}            
             new_shared_user = {str(user['id']) : user for user in users if 
                                     user['id'] not in current_shared_users 
-                                    and user['email'] != current_user.email
+                                    and user['email'] != current_user.email  #do not share to self
                                 }
-            CopoGroup().add_users_to_group(group_id=group_id, user_ids=list(new_shared_user.keys()))
-            #send email to new_shared_user_ids to notify them of shared profile
-            Email().notify_shared_profile_to_existing_user(profile, new_shared_user.values())
+            if new_shared_user:
+                CopoGroup().add_users_to_group(group_id=group_id, user_ids=list(new_shared_user.keys()))
+
+                #send email to new_shared_user_ids to notify them of shared profile
+                Email().notify_shared_profile_to_existing_user(profile, new_shared_user.values())
 
         CopoGroup().remove_users_from_group(group_id=group_id, user_ids=incorrect_shared_user_ids)
 
         if missing_user_emails:
             #create customer_emails_tokens for these emails
             customer_emails_tokens = { str(uuid.uuid4()):email for email in missing_user_emails}
+            """
+            create new customer_emails_token in case the owner re-shares the profile to someone else, overwrite existing tokens
+            and send email again
+            """
             Profile().get_collection_handle().update_one({"_id":profile["_id"]},{"$set":{"customer_emails_tokens": customer_emails_tokens}})
             #send email to these users with token link to join the profile
             Email().notify_shared_profile_to_not_exist_user(profile, customer_emails_tokens)
